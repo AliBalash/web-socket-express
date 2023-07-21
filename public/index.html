@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebSocket Example</title>
+</head>
+<body>
+  <div id="square" style="width: 300px; height: 300px; border: 1px solid black; position: relative;"></div>
+  <button id="addCircleBtn">Add Circle</button>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+
+    let movingCircle = null;
+
+    function moveCircle(e) {
+      if (movingCircle) {
+        const squareRect = document.getElementById('square').getBoundingClientRect();
+        const x = e.clientX - squareRect.left - movingCircle.offsetX;
+        const y = e.clientY - squareRect.top - movingCircle.offsetY;
+
+        // Ensure the circle stays within the square
+        const maxX = squareRect.width - movingCircle.offsetWidth;
+        const maxY = squareRect.height - movingCircle.offsetHeight;
+        movingCircle.style.left = `${Math.min(Math.max(x, 0), maxX)}px`;
+        movingCircle.style.top = `${Math.min(Math.max(y, 0), maxY)}px`;
+
+        const circleData = {
+          id: movingCircle.id,
+          x: parseInt(movingCircle.style.left),
+          y: parseInt(movingCircle.style.top),
+        };
+
+        socket.emit('circleMoved', circleData);
+      }
+    }
+
+    document.getElementById('addCircleBtn').addEventListener('click', () => {
+      const circleData = {
+        id: Date.now(), // Generate a unique ID for the circle
+        x: Math.floor(Math.random() * 260), // Random x position within the square
+        y: Math.floor(Math.random() * 260), // Random y position within the square
+      };
+
+      // Emit the circle data to the server
+      socket.emit('circleAdded', circleData);
+
+      // Add the circle locally for immediate feedback
+      const circle = document.createElement('div');
+      circle.id = circleData.id;
+      circle.className = 'circle movable';
+      circle.style.width = '40px';
+      circle.style.height = '40px';
+      circle.style.borderRadius = '50%';
+      circle.style.backgroundColor = 'blue';
+      circle.style.position = 'absolute';
+      circle.style.left = `${circleData.x}px`;
+      circle.style.top = `${circleData.y}px`;
+      document.getElementById('square').appendChild(circle);
+    });
+
+    document.addEventListener('mousedown', (e) => {
+        movingCircle = e.target;
+        const circleRect = movingCircle.getBoundingClientRect();
+        const squareRect = document.getElementById('square').getBoundingClientRect();
+        movingCircle.offsetX = e.clientX - circleRect.left;
+        movingCircle.offsetY = e.clientY - circleRect.top;
+        document.addEventListener('mousemove', moveCircle);
+    });
+
+    document.addEventListener('mouseup', () => {
+      movingCircle = null;
+      document.removeEventListener('mousemove', moveCircle);
+    });
+
+    // Listen for circle data from other clients and add circles locally
+    socket.on('circleAdded', (circleData) => {
+      const circle = document.createElement('div');
+      circle.id = circleData.id;
+      circle.className = 'circle';
+      circle.style.width = '40px';
+      circle.style.height = '40px';
+      circle.style.borderRadius = '50%';
+      circle.style.backgroundColor = 'red';
+      circle.style.position = 'absolute';
+      circle.style.left = `${circleData.x}px`;
+      circle.style.top = `${circleData.y}px`;
+      document.getElementById('square').appendChild(circle);
+    });
+
+    // Listen for circle position updates from other clients
+    socket.on('circleMoved', (circleData) => {
+      const circle = document.getElementById(circleData.id);
+      if (circle) {
+        circle.style.left = `${circleData.x}px`;
+        circle.style.top = `${circleData.y}px`;
+      }
+    });
+  </script>
+</body>
+</html>
